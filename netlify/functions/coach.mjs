@@ -16,8 +16,9 @@ export default async (req, context) => {
   const key = Netlify.env.get("GEMINI_API_KEY");
   if (!key) return json({ error: "Gemini não configurado." }, 503);
 
-  const allowed = Netlify.env.get("ALLOWED_ORIGIN");
-  if (allowed && req.headers.get("origin") !== allowed) return json({ error: "Origem não permitida." }, 403);
+  // O domínio público atual do site; não depende de uma variável que possa estar com URL antiga.
+  const allowed = "https://enem6.netlify.app";
+  if (req.headers.get("origin") !== allowed) return json({ error: "Origem não permitida." }, 403);
 
   const ip = context?.ip || "anon", now = Date.now();
   const recent = (hits.get(ip) || []).filter((t) => now - t < 60000);
