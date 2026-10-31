@@ -6,6 +6,7 @@ const PROMPTS = {
   historical: "Você é uma tutora do Enem. " + BASE + "Explique o conceito e o raciocínio passo a passo usando só o enunciado e as alternativas fornecidos. Não afirme gabarito oficial.",
 };
 const MAX_CHARS = 12000;
+const MODEL = "gemini-3.8-flash";
 const hits = new Map();
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
@@ -30,11 +31,12 @@ export default async (req, context) => {
   const text = JSON.stringify(body.payload ?? {});
   if (text.length > MAX_CHARS) return json({ error: "Texto longo demais. Envie uma redação ou questão por vez." }, 413);
 
-  const model = Netlify.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+  const model = MODEL;
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text }] }],
@@ -46,7 +48,10 @@ export default async (req, context) => {
     const answer = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("").trim();
     if (!answer) return json({ error: "O Gemini não retornou texto." }, 502);
     return json({ answer, model, provider: "Gemini" });
-  } catch {
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      return json({ error: "O Gemini demorou mais de 30 segundos para responder. Tente novamente." }, 504);
+    }
     return json({ error: "Não foi possível falar com o Gemini." }, 502);
   }
 };
